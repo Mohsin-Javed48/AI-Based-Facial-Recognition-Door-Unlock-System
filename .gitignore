@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Recognition service local data (biometric embeddings, logs, models) - never commit
+recognition/.env
+recognition/data/embeddings/*
+!recognition/data/embeddings/.gitkeep
+recognition/data/logs/*
+!recognition/data/logs/.gitkeep
+recognition/data/test_set/known/*
+!recognition/data/test_set/known/.gitkeep
+recognition/data/test_set/unknown/*
+!recognition/data/test_set/unknown/.gitkeep
+
+# InsightFace downloaded model weights
+.insightface/

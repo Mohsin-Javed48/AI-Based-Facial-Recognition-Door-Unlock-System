@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ClaudeCodeEditorTabs">
+    <option name="activeSessionId" value="dd46248e-27ea-49ea-acf0-d51a7ba03398" />
+    <option name="openSessionIds">
+      <list>
+        <option value="730044b0-d20a-4a40-b8d4-afa9fea0f0c2" />
+        <option value="a5315d31-6e52-43a4-89b9-32cf7fe1ba73" />
+        <option value="4c85a974-9ef4-4dde-a97c-e433cce85d47" />
+        <option value="85063d8f-9e88-496e-ba76-da9cee468065" />
+        <option value="dd46248e-27ea-49ea-acf0-d51a7ba03398" />
+      </list>
+    </option>
+    <option name="sessionPaths">
+      <map>
+        <entry key="4c85a974-9ef4-4dde-a97c-e433cce85d47" value="/sessions/1701ebca-6fa6-44fa-88d2-a381f7d83638" />
+        <entry key="730044b0-d20a-4a40-b8d4-afa9fea0f0c2" value="/sessions/1701ebca-6fa6-44fa-88d2-a381f7d83638" />
+        <entry key="85063d8f-9e88-496e-ba76-da9cee468065" value="/sessions/1701ebca-6fa6-44fa-88d2-a381f7d83638" />
+        <entry key="a5315d31-6e52-43a4-89b9-32cf7fe1ba73" value="/403" />
+        <entry key="dd46248e-27ea-49ea-acf0-d51a7ba03398" value="/sessions/1701ebca-6fa6-44fa-88d2-a381f7d83638" />
+      </map>
+    </option>
+    <option name="sessionTitles">
+      <map>
+        <entry key="4c85a974-9ef4-4dde-a97c-e433cce85d47" value="edit the readme.md file and format it" />
+        <entry key="730044b0-d20a-4a40-b8d4-afa9fea0f0c2" value="edit the readme.md file and format it" />
+        <entry key="85063d8f-9e88-496e-ba76-da9cee468065" value="edit the readme.md file and format it" />
+        <entry key="a5315d31-6e52-43a4-89b9-32cf7fe1ba73" value="403 Forbidden" />
+        <entry key="dd46248e-27ea-49ea-acf0-d51a7ba03398" value="edit the readme.md file and format it" />
+      </map>
+    </option>
+  </component>
+</project>

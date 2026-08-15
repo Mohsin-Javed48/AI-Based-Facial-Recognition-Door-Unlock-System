@@ -10,68 +10,125 @@
 
 **Development strategy:** Build and fully validate the whole system first using your laptop's built-in webcam — zero hardware cost. Once face recognition accuracy, the dashboard, and the gate-trigger logic are all working and tested, swap in the real camera and relay hardware. Only the camera source line and the gate-trigger function change; everything else carries over untouched.
 
+### 1.1 How It Works — End-to-End Flow
+
+1. **Capture** — The camera (webcam in dev, capture card/DVR in production) feeds frames to the Python recognition service via `cv2.VideoCapture()`.
+2. **Detect** — Each frame is scanned for faces using InsightFace's detector.
+3. **Embed & Match** — Every detected face is converted into a numeric embedding and compared (cosine similarity) against the embeddings of all enrolled family members.
+4. **Decide** — If the best match's confidence clears the configured threshold, it's a recognized member; otherwise it's logged as "unknown."
+5. **Act** — On a match, the recognition service calls the gate-trigger function (a console/DB stub in dev, a real relay pulse via USB relay/ESP32 in production) and publishes an event to Redis.
+6. **Notify** — The Nest.js backend subscribes to that Redis event, writes an access-log row to PostgreSQL, and pushes the event over WebSocket to the Next.js dashboard, which updates the Live Status Panel and Access Log instantly.
+7. **Fail-safe** — The physical remote/wall switch and the dashboard's manual unlock button work independently of this pipeline at every stage, so a crashed AI service never locks anyone out.
+
+![img.png](Flow.png)
+
+### 1.2 Why the Work Is Phased This Way
+
+Each phase exists to isolate risk and defer spending. Phases 0–1 prove the entire software stack — recognition accuracy, backend, dashboard — on hardware you already own, at zero cost. Phase 2 is a decision checkpoint: it only makes sense to spend money once you know whether your gate is already motorized. Phases 3–4 move the already-proven software onto real hardware and harden it for unattended 24/7 operation. Phase 5 validates accuracy safely in shadow mode before the system is trusted to actually unlock the gate. Phase 6 is steady-state operation. This ordering means the expensive or hard-to-reverse decisions (which relay bridge to buy, whether to install a motor) happen only after the cheap, fully reversible software work has already been de-risked.
+
 ## 2. Phases
 
-### Phase 0 — Software-First Build on Webcam (Week 1–2, zero hardware cost)
+### 2.1 Phase 0 — Software-First Build on Webcam (Week 1–2, zero hardware cost)
 
-- Set up the laptop with Linux (Ubuntu recommended — lighter, more stable for 24/7 headless service than Windows). You can also develop on Windows/Mac first and move to Ubuntu later for deployment.
-- Build the Python recognition service reading from the laptop's built-in webcam (`cv2.VideoCapture(0)`).
-- Enroll family members: capture 5–10 photos per person from different angles/lighting via the webcam, generate face embeddings.
-- Implement the recognition loop: detect face → generate embedding → compare against enrolled embeddings → confidence score → decision.
-- Build the "gate trigger" function as a simulated stub — instead of firing a real relay, it just logs "GATE WOULD OPEN for [Name]" to the console/database. This is the exact function you'll swap to a real relay call later, with no other code changes.
-- Tune detection thresholds using webcam testing before worrying about outdoor lighting/night conditions.
+**Objective:** Prove the full recognition pipeline works end to end using only the laptop's built-in webcam.
 
-### Phase 1 — Backend & Dashboard (Week 2–3, still zero hardware cost)
+**Sub-tasks:**
+- [ ] Install Ubuntu (or continue on the current OS for early dev) and set up a Python virtual environment
+- [ ] Install core dependencies: OpenCV, InsightFace (or DeepFace), numpy, and a lightweight local store for embeddings (a file or SQLite is fine before Phase 1's Postgres exists)
+- [ ] Write a capture script that opens the webcam via `cv2.VideoCapture(0)` and displays the live feed with an FPS counter
+- [ ] Integrate InsightFace's face detector into the capture loop to draw bounding boxes on detected faces
+- [ ] Build an enrollment script: capture 5–10 photos per family member from different angles/lighting, generate and store their face embeddings tagged with name
+- [ ] Implement the recognition loop: detect face → generate embedding → compare against all enrolled embeddings (cosine similarity) → return best match + confidence score
+- [ ] Define a configurable confidence threshold (not hardcoded) for the accept/reject decision
+- [ ] Build the "gate trigger" function as a stub: logs `"GATE WOULD OPEN for [Name]"` with a timestamp to the console and to a local log/DB — this is the exact function Phase 3 swaps to a real relay call, with no other code changes
+- [ ] Build a small labeled test set (known faces + unknown faces) and measure false-accept/false-reject rates at a few threshold values to pick a starting default
+- [ ] Document environment setup (`requirements.txt`, run instructions) so Phase 1's backend can call into this service
 
-- Nest.js backend exposing REST/WebSocket APIs (matches your existing stack) for:
-  - Live recognition events
-  - Enrolled members management (add/remove/edit)
-  - Access logs
-  - Manual gate trigger
-- PostgreSQL for storing member profiles, face embeddings metadata, and access logs.
-- Redis for pub/sub — push real-time "gate opened for [Name]" events to the dashboard instantly.
-- Next.js dashboard (details in Section 5) — fully testable end-to-end using the webcam feed and simulated gate trigger.
+### 2.2 Phase 1 — Backend & Dashboard (Week 2–3, still zero hardware cost)
 
-### Phase 2 — Gate Check & Hardware Decisions (Week 3)
+**Objective:** Wrap the recognition service with a backend, database, and dashboard so events, logs, and enrollment are manageable from a UI instead of the terminal.
 
-- Determine if your gate already has a motor (see Section 6, Step 1). This decides your hardware list and budget.
-- Decide relay bridge: USB relay module (simplest, if the laptop will sit near the gate motor) vs. ESP32 + relay (if the laptop stays indoors, away from the gate — see Section 6 for the tradeoff).
-- Since you already own an analog (BNC/coax) CCTV camera, decide: USB video capture card (camera plugs straight into the laptop, cheapest, laptop must sit near camera) vs. DVR (camera → DVR → network RTSP, laptop can be anywhere on the network, but costs more).
-- Buy whichever hardware combination fits your layout: capture card or DVR, relay or ESP32+relay, and — only if your gate has no motor — a gate motor or a solenoid/electromagnetic lock (see Section 6, Step 3).
+**Sub-tasks:**
+- [ ] Scaffold the Nest.js project (modules: members, access-events, auth)
+- [ ] Design the PostgreSQL schema: `members` (profile), `embeddings` (per-member face vectors/metadata), `access_logs` (timestamp, member, confidence, snapshot path, action taken)
+- [ ] Set up migrations (TypeORM/Prisma) for the schema above
+- [ ] Implement REST endpoints: member CRUD, access-log listing with filters, manual gate-trigger endpoint
+- [ ] Implement a WebSocket gateway for pushing live recognition events to connected dashboard clients
+- [ ] Wire Redis pub/sub between the Python recognition service and the Nest.js backend: the recognition service publishes on every match/unknown event, the backend subscribes and relays to WebSocket clients and writes to Postgres
+- [ ] Scaffold the Next.js dashboard and connect it to the backend's REST/WebSocket APIs
+- [ ] Build the Live Status Panel (camera snapshot, gate status, manual unlock button)
+- [ ] Build the Access Log page (table, date/person filters, snapshot preview)
+- [ ] Build the Family Members page (list, add-member flow that triggers enrollment capture, disable/remove toggle)
+- [ ] Build the Alerts panel (unknown-face banner, system health indicators)
+- [ ] Add basic authentication so the dashboard isn't reachable by anyone on the network
+- [ ] Run a full end-to-end test: webcam feed → recognition → simulated trigger → event appears live on the dashboard and in the access log
 
-### Phase 3 — Hardware Migration (Week 3–4)
+### 2.3 Phase 2 — Gate Check & Hardware Decisions (Week 3)
 
-- Swap the camera source line: webcam (`VideoCapture(0)`) → capture card device index, or → DVR's RTSP URL. No other recognition code changes.
-- Wire the relay (USB relay or ESP32+relay) into the gate motor's existing trigger circuit — this simulates pressing the wall push-button, since switch-controlled gate motors are self-locking and don't need a separate lock (see Section 6 for full wiring explanation).
-- Replace the simulated "GATE WOULD OPEN" stub with the real trigger call (pyserial command to the USB relay or ESP32).
-- Add a cooldown period (e.g. 10–15 seconds) after each real trigger to prevent repeated firing from the same detection.
-- Add a manual override/failsafe: physical push-button or dashboard toggle still works independently of the AI.
-- Mount the camera and relay hardware outdoors in a weatherproof enclosure near the gate.
+**Objective:** Turn the physical constraints of your specific gate into a concrete, budgeted hardware list before spending anything.
 
-### Phase 4 — Reliability & Hardening (Week 4–5)
+**Sub-tasks:**
+- [ ] Inspect the gate in person: look for a motor box (sliding gates) or hinge-post motor (swing gates); confirm motorized vs. manual per Section 6, Step 1
+- [ ] Test the existing remote/wall switch and note how its wiring is accessed (needed for the relay tap-in in Phase 3)
+- [ ] Decide capture path — USB capture card vs. DVR+RTSP — based on where the laptop will physically sit relative to the camera (Section 6, Step 2)
+- [ ] Decide relay bridge — USB relay vs. ESP32+relay — based on the distance between the laptop and the gate motor (Section 6, Step 3)
+- [ ] If the gate is fully manual, evaluate motor vs. solenoid/electromagnetic lock feasibility based on gate weight and swing vs. slide design (Section 6, Step 5)
+- [ ] Finalize the parts list and budget using the Section 6, Step 4 cost tables
+- [ ] Order the hardware
 
-- Convert the Python recognition service and Nest.js backend into systemd services with `Restart=always`.
-- Disable laptop sleep/hibernate; disable lid-close suspend if running with lid shut.
-- Write a watchdog script that checks the recognition process is alive and the video feed isn't frozen — auto-restarts if not.
-- Configure laptop BIOS to auto-power-on after power outage (most laptops handle this fine on battery + charger anyway, but worth checking your router/DVR have the same setting since they're upstream dependencies).
-- Set up a small UPS for the laptop + networking gear so a brief power cut doesn't drop the whole system.
+### 2.4 Phase 3 — Hardware Migration (Week 3–4)
 
-### Phase 5 — Testing & Field Trial (Week 5–6)
+**Objective:** Move the already-proven software from the webcam onto the real camera and relay hardware, one swap at a time.
 
-- Run for 1–2 weeks in "shadow mode" outdoors — log what it would have done without actually triggering the gate, to validate accuracy under real conditions.
-- Test in different lighting: daylight, dusk, full IR/night mode, rain/fog if applicable.
-- Test with masks, sunglasses, hats — decide fallback behavior (e.g. still require manual entry if confidence is low).
-- Load-test relay pulse timing against your specific gate motor.
+**Sub-tasks:**
+- [ ] Install/confirm the capture card driver, or confirm the DVR's RTSP URL; verify the stream opens in OpenCV before touching the recognition code
+- [ ] Swap the camera source in config (webcam index → capture card index or RTSP URL) and re-verify recognition accuracy on the real feed
+- [ ] Wire the relay's NO contacts in parallel with the existing push-button wires (or flash and wire the ESP32 if using that bridge) — this simulates pressing the wall push-button, since switch-controlled gate motors are self-locking and don't need a separate lock
+- [ ] Replace the stub gate-trigger function with the real trigger call (pyserial command to the USB relay, or a call to the ESP32)
+- [ ] Add a cooldown period (10–15 seconds) after each real trigger so one visit doesn't fire the relay repeatedly
+- [ ] Wire and test the manual override (physical push-button and/or dashboard toggle) so it works independently of the AI/recognition pipeline
+- [ ] Mount the camera and relay hardware outdoors in a weatherproof enclosure and run the cabling
+- [ ] Run a live walk-up test end to end: recognized face → real relay fire → gate physically opens
 
-### Phase 6 — Go-Live & Ongoing Maintenance (Ongoing)
+### 2.5 Phase 4 — Reliability & Hardening (Week 4–5)
 
-- Switch from shadow mode to live triggering.
-- Monitor dashboard logs weekly for false positives/negatives.
-- Re-enroll faces every few months (hairstyle/beard/glasses changes affect accuracy).
+**Objective:** Turn a working prototype into something that survives unattended, 24/7, outdoor operation.
+
+**Sub-tasks:**
+- [ ] Write systemd unit files for the Python recognition service and the Nest.js backend with `Restart=always`
+- [ ] Disable laptop sleep/hibernate; disable lid-close suspend if running with the lid shut
+- [ ] Write a watchdog script that checks the recognition process is alive and the video feed isn't frozen (stale last-frame timestamp); auto-restart the service if either check fails
+- [ ] Register the watchdog itself as a systemd service/timer so it survives reboots
+- [ ] Configure laptop BIOS to auto-power-on after a power outage; confirm the router and DVR (if used) have the equivalent setting, since they're upstream dependencies
+- [ ] Size and install a small UPS for the laptop and networking gear; test how long it actually rides out a power cut
+- [ ] Set up log rotation for the recognition/backend services so logs don't fill the disk over months
+
+### 2.6 Phase 5 — Testing & Field Trial (Week 5–6)
+
+**Objective:** Prove real-world accuracy without risk, before the system is trusted to actually control the gate.
+
+**Sub-tasks:**
+- [ ] Deploy in shadow mode (recognition + logging only, real trigger disabled) for 1–2 weeks outdoors
+- [ ] Review shadow-mode logs regularly for false positives/negatives and note the conditions around each miss
+- [ ] Test across lighting conditions: daylight, dusk, full IR/night mode, rain/fog if applicable in your climate
+- [ ] Test edge cases: masks, sunglasses, hats, and more than one person approaching together
+- [ ] Define and implement fallback behavior for low-confidence detections (e.g. require manual entry instead of guessing)
+- [ ] Load-test relay pulse timing against your specific gate motor's requirements
+- [ ] Re-tune the confidence threshold using real trial data before considering go-live
+
+### 2.7 Phase 6 — Go-Live & Ongoing Maintenance (Ongoing)
+
+**Objective:** Run the system live and keep it accurate over time.
+
+**Sub-tasks:**
+- [ ] Disable shadow mode and switch to live gate triggering
+- [ ] Set a recurring (weekly) cadence to review dashboard logs for false positives/negatives
+- [ ] Schedule periodic re-enrollment (every few months, or immediately after a major appearance change — new beard, glasses, hairstyle)
+- [ ] Periodically check hardware health: relay cycle wear, camera lens/cabling, UPS battery condition
 
 ## 3. Requirements
 
-### Functional
+### 3.1 Functional
 
 - Real-time face detection and recognition from a live video feed (webcam during development, real camera in production — interchangeable via a single config line)
 - Automatic gate unlock trigger on recognized match
@@ -79,7 +136,7 @@
 - Access logging with timestamp, matched name, confidence score, and snapshot image
 - Family member enrollment/management interface
 
-### Non-functional
+### 3.2 Non-functional
 
 - 24/7 uptime with auto-recovery from crashes or reboots
 - Recognition latency under ~2 seconds from face appearing to gate trigger
@@ -106,26 +163,26 @@
 
 **Main sections:**
 
-**Live Status Panel**
+**5.1 Live Status Panel**
 - Current camera feed thumbnail (snapshot refresh every few seconds, not full live stream, to save bandwidth)
 - Gate status: Locked / Just Opened / Manual Override Active
 - Big "Manual Unlock" button (with confirmation)
 
-**Access Log**
+**5.2 Access Log**
 - Table: Timestamp | Matched Name | Confidence % | Snapshot | Action Taken (Auto-opened / Denied / Manual)
 - Filter by date range / person
 - Snapshot thumbnail click-to-expand
 
-**Family Members**
+**5.3 Family Members**
 - List of enrolled members with profile photo
 - Add new member (capture/upload photos → re-train embeddings)
 - Remove/disable a member (e.g. temporarily block someone without deleting their profile)
 
-**Alerts & Notifications**
+**5.4 Alerts & Notifications**
 - Unknown face detected at gate (optional: push notification via Telegram/WhatsApp — see future features)
 - System health: camera offline, recognition service down, relay unresponsive
 
-**Analytics (simple)**
+**5.5 Analytics (simple)**
 - Chart: entries per day/week
 - Chart: most frequent visitors
 - False-positive/negative flagging (mark a log entry as wrong to improve future tuning)
@@ -134,11 +191,11 @@
 
 You currently have a laptop and a basic analog (BNC/coax) CCTV camera. Development (Phases 0–1) needs zero new hardware — it all runs on the laptop's built-in webcam. The purchases below are only needed once you move to Phase 2/3 (real hardware). The one thing that massively changes your budget is whether your gate is already motorized.
 
-### Step 0: Development phase — buy nothing yet
+### 6.1 Step 0: Development phase — buy nothing yet
 
 Build and fully test the software using the laptop's webcam first (see Phases 0–1). Confirm recognition accuracy and dashboard functionality before spending anything.
 
-### Step 1: Check if your gate already has a motor
+### 6.2 Step 1: Check if your gate already has a motor
 
 Before buying anything, confirm this:
 
@@ -148,21 +205,21 @@ Before buying anything, confirm this:
 
 If your gate already opens via a wired wall switch/push-button, you have a motor with a self-locking gearbox — you do not need to buy a separate lock. The motor holds the gate shut mechanically; your relay just needs to mimic pressing that existing button (wire the relay's NO contacts in parallel with the button's wires). This is by far the cheapest and simplest case.
 
-### Step 2: Camera hardware — using your existing analog CCTV camera
+### 6.3 Step 2: Camera hardware — using your existing analog CCTV camera
 
 | Option | Cost (PKR) | Notes |
 |---|---|---|
 | USB BNC-to-USB video capture card | 2,500 – 6,000 | Cheapest — camera plugs straight into the laptop's USB port, read via OpenCV like a webcam. Laptop must sit near the camera. Match the card to your camera's signal type (CVBS/AHD/TVI/CVI). |
 | DVR (camera → DVR → network RTSP) | 5,000 – 10,000+ (DVR box) | Only needed if the laptop must sit elsewhere on the network, or you want multi-camera/recorded storage later. |
 
-### Step 3: Relay bridge — connecting the laptop to the gate
+### 6.4 Step 3: Relay bridge — connecting the laptop to the gate
 
 | Option | Cost (PKR) | Notes |
 |---|---|---|
 | USB relay module | 500 – 1,500 | Simplest — plugs directly into the laptop via USB, controlled with serial commands. Best if the laptop sits near the gate motor. |
 | ESP32 + relay module | 1,200 – 2,000 | Adds Wi-Fi so the relay can sit at the gate while the laptop stays indoors. Slightly more setup (flashing firmware), but avoids a long USB/serial cable run. |
 
-### Step 4: Cost Breakdown (PKR) — Two Gate Scenarios
+### 6.5 Step 4: Cost Breakdown (PKR) — Two Gate Scenarios
 
 | Component | Scenario A: Gate already has a motor | Scenario B: Fully manual gate |
 |---|---|---|
@@ -176,7 +233,7 @@ If your gate already opens via a wired wall switch/push-button, you have a motor
 
 The gap is almost entirely the gate motor. Everything on the "smart" side — camera capture, AI recognition, relay trigger — stays cheap in both cases, and Scenario A got even cheaper than before now that a DVR/IP camera isn't required.
 
-### Step 5: A Cheaper Middle Ground (Scenario B alternative)
+### 6.6 Step 5: A Cheaper Middle Ground (Scenario B alternative)
 
 If a full motor (PKR 70,000+) feels excessive, consider an electromagnetic or solenoid gate lock (PKR 3,000 – 15,000) paired with a spring-assisted or gravity-swing gate design:
 

@@ -1,0 +1,13 @@
+# Pinned to the exact insightface release verified to ship a pure-Python
+# wheel on Windows (no C++ build toolchain required). Older 0.7.x releases
+# require compiling a bundled Cython extension and fail on a clean Windows
+# machine without Microsoft C++ Build Tools installed.
+insightface==1.0.1
+opencv-python>=4.9,<5
+onnxruntime>=1.17,<2
+numpy>=1.26,<2
+python-dotenv>=1.0,<2
+
+# dev / test only
+pytest>=8.0,<9
+ruff>=0.6,<1
