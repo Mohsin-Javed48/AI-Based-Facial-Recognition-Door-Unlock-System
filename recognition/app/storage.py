@@ -6,12 +6,14 @@ simple so that migration is a swap, not a rewrite of calling code.
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+import cv2
 import numpy as np
 
 
@@ -46,6 +48,29 @@ class EmbeddingStore:
         if not member_dir.exists():
             return 0
         return len(list(member_dir.glob("embedding_*.npy")))
+
+
+_UNSAFE_FILENAME_CHARS = re.compile(r"[^A-Za-z0-9_-]+")
+
+
+class SnapshotStore:
+    """Saves a JPEG of the current frame alongside each published
+    recognition event, so the Phase 1 dashboard has something to display
+    (README Section 5 "Snapshot" column / Section 6 snapshotPath)."""
+
+    def __init__(self, snapshots_dir: Path) -> None:
+        self._dir = snapshots_dir
+        self._dir.mkdir(parents=True, exist_ok=True)
+
+    def save(self, frame: np.ndarray, label: str) -> str:
+        """Returns the filename only (not a full path) - callers publish
+        this as ``snapshotPath``; the backend resolves it against its own
+        configured snapshots directory (same machine, shared filesystem)."""
+        timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+        safe_label = _UNSAFE_FILENAME_CHARS.sub("_", label)
+        filename = f"{timestamp}_{safe_label}.jpg"
+        cv2.imwrite(str(self._dir / filename), frame)
+        return filename
 
 
 @dataclass
@@ -86,7 +111,9 @@ class AccessLogStore:
         finally:
             conn.close()
 
-    def log(self, member_name: str, confidence: float, event_type: str, action: str) -> AccessLogEntry:
+    def log(
+        self, member_name: str, confidence: float, event_type: str, action: str
+    ) -> AccessLogEntry:
         entry = AccessLogEntry(
             timestamp=datetime.now(UTC).isoformat(),
             member_name=member_name,
@@ -98,7 +125,13 @@ class AccessLogStore:
             conn.execute(
                 "INSERT INTO access_logs (timestamp, member_name, confidence, event_type, action) "
                 "VALUES (?, ?, ?, ?, ?)",
-                (entry.timestamp, entry.member_name, entry.confidence, entry.event_type, entry.action),
+                (
+                    entry.timestamp,
+                    entry.member_name,
+                    entry.confidence,
+                    entry.event_type,
+                    entry.action,
+                ),
             )
         return entry
 

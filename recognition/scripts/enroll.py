@@ -29,7 +29,9 @@ from app.storage import EmbeddingStore
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Enroll a family member's face.")
-    parser.add_argument("--name", required=True, help="Member name/identifier (used as folder name).")
+    parser.add_argument(
+        "--name", required=True, help="Member name/identifier (used as folder name)."
+    )
     parser.add_argument(
         "--samples",
         type=int,
@@ -48,7 +50,9 @@ def main() -> int:
     session = EnrollmentSession(args.name, detector, store, target_samples=args.samples)
 
     if session.is_complete:
-        print(f"'{args.name}' already has {session.captured} samples (target {args.samples}). Nothing to do.")
+        print(
+            f"'{args.name}' already has {session.captured}/{args.samples} samples. Nothing to do."
+        )
         return 0
 
     print(f"Enrolling '{args.name}'. Target: {args.samples} samples.")
@@ -60,7 +64,9 @@ def main() -> int:
                 frame = cam.read()
                 display = frame.copy()
                 status = f"{args.name}: {session.captured}/{args.samples}  (SPACE=capture, Q=quit)"
-                cv2.putText(display, status, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                cv2.putText(
+                    display, status, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2
+                )
                 cv2.imshow("Enroll - Phase 0", display)
 
                 key = cv2.waitKey(1) & 0xFF

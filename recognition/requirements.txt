@@ -7,6 +7,7 @@ opencv-python>=4.9,<5
 onnxruntime>=1.17,<2
 numpy>=1.26,<2
 python-dotenv>=1.0,<2
+redis>=5.0,<6
 
 # dev / test only
 pytest>=8.0,<9

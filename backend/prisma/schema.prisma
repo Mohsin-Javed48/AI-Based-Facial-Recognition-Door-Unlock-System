@@ -1,0 +1,77 @@
+// Phase 1 schema (README Section 2.2). Embedding VECTORS stay on disk under
+// recognition/data/embeddings/ (Phase 0 is not redesigned) - the Embedding
+// model here only stores metadata/pointers so the dashboard can list/manage
+// enrollment samples per member.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Member {
+  id            String   @id @default(uuid())
+  name          String
+  profilePhoto  String?  @map("profile_photo")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  embeddings  Embedding[]
+  accessLogs  AccessLog[]
+
+  @@map("members")
+}
+
+model Embedding {
+  id          String   @id @default(uuid())
+  memberId    String   @map("member_id")
+  member      Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  // Path to the .npy file under recognition/data/embeddings/<member_name>/,
+  // relative to the recognition service's DATA_DIR - not the vector itself.
+  filePath    String   @map("file_path")
+  sampleIndex Int      @map("sample_index")
+  metadata    Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([memberId])
+  @@map("embeddings")
+}
+
+enum AccessEventType {
+  FACE_RECOGNIZED
+  FACE_UNKNOWN
+  MANUAL
+}
+
+enum GateAction {
+  AUTO_OPENED
+  MANUAL_OPENED
+  DENIED
+  NONE
+}
+
+model AccessLog {
+  id           String          @id @default(uuid())
+  // When the event actually happened (from the recognition service / manual
+  // trigger), distinct from createdAt (when this row was written).
+  timestamp    DateTime
+  memberId     String?         @map("member_id")
+  member       Member?         @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  // Denormalized so the log stays meaningful even if the member is later
+  // renamed or deleted.
+  matchedName  String?         @map("matched_name")
+  // Null for MANUAL events - a button press has no recognition confidence.
+  confidence   Float?
+  snapshotPath String?         @map("snapshot_path")
+  action       GateAction
+  eventType    AccessEventType @map("event_type")
+  createdAt    DateTime        @default(now()) @map("created_at")
+
+  @@index([timestamp])
+  @@index([memberId])
+  @@map("access_logs")
+}

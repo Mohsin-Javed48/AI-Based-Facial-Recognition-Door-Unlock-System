@@ -1,0 +1,29 @@
+#!/bin/sh
+# Blocks `git push` unless the recognition/ codebase lints and builds clean.
+# Installed via: git config core.hooksPath .githooks
+
+set -e
+
+cd "$(git rev-parse --show-toplevel)/recognition"
+
+if [ -x ".venv/Scripts/python.exe" ]; then
+    PYTHON=".venv/Scripts/python.exe"
+elif [ -x ".venv/bin/python" ]; then
+    PYTHON=".venv/bin/python"
+else
+    PYTHON="python"
+fi
+
+echo "pre-push: running recognition/ lint + build gate..."
+
+"$PYTHON" scripts/lint.py || {
+    echo "pre-push: lint failed - push blocked. Fix issues (try 'ruff check --fix .' / 'ruff format .') and try again."
+    exit 1
+}
+
+"$PYTHON" scripts/build.py || {
+    echo "pre-push: build failed - push blocked. Fix failing tests/imports and try again."
+    exit 1
+}
+
+echo "pre-push: all checks passed."

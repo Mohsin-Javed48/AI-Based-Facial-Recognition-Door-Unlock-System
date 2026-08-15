@@ -70,7 +70,9 @@ def load_samples(test_set_dir: Path, detector: FaceDetector, enrolled: dict) -> 
     if known_dir.exists():
         for member_dir in sorted(p for p in known_dir.iterdir() if p.is_dir()):
             for image_path in _iter_images(member_dir):
-                samples.append(_score_image(image_path, detector, enrolled, true_name=member_dir.name))
+                samples.append(
+                    _score_image(image_path, detector, enrolled, true_name=member_dir.name)
+                )
 
     for image_path in _iter_images(test_set_dir / "unknown"):
         samples.append(_score_image(image_path, detector, enrolled, true_name=None))
@@ -115,7 +117,9 @@ def recommend_threshold(reports: list[dict]) -> float | None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Evaluate recognition thresholds against a test set.")
+    parser = argparse.ArgumentParser(
+        description="Evaluate recognition thresholds against a test set."
+    )
     parser.add_argument(
         "--thresholds",
         type=float,

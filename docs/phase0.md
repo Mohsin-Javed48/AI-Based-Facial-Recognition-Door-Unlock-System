@@ -22,7 +22,9 @@ recognition/
 ├── scripts/
 │   ├── enroll.py               # interactive enrollment CLI
 │   ├── run_webcam.py           # main recognition loop
-│   └── evaluate_thresholds.py  # accuracy sanity-check across thresholds
+│   ├── evaluate_thresholds.py  # accuracy sanity-check across thresholds
+│   ├── lint.py                 # ruff check + ruff format --check
+│   └── build.py                # compileall + pytest
 ├── data/
 │   ├── embeddings/       # one folder per enrolled member (gitignored)
 │   ├── logs/             # access_log.sqlite3 (gitignored)
@@ -207,7 +209,20 @@ means your `known/<name>/*.jpg` and `unknown/*.jpg` files should look like
 ordinary photos, the same way a webcam frame would, not pre-cropped
 headshots.
 
-## 11. Known limitations
+## 11. Code quality gate (lint + build)
+
+```powershell
+python scripts\lint.py    # ruff check + ruff format --check
+python scripts\build.py   # compileall (syntax/import check) + pytest
+```
+
+Both are wired into a `pre-push` git hook (`.githooks/pre-push`, enabled via
+`git config core.hooksPath .githooks`, already configured in this repo) so
+`git push` is blocked if either fails. If a push is rejected, run
+`ruff check --fix .` and `ruff format .` from `recognition/`, address any
+remaining issues or test failures, and push again.
+
+## 12. Known limitations
 
 - **No face tracking across frames.** Each frame's detections are
   independent; there is no identity-tracking between frames. A person

@@ -37,6 +37,8 @@ class Config:
     gate_cooldown_seconds: float
     data_dir: Path
     log_level: str
+    redis_url: str
+    redis_recognition_channel: str
 
     @property
     def embeddings_dir(self) -> Path:
@@ -50,6 +52,10 @@ class Config:
     def access_log_db_path(self) -> Path:
         return self.logs_dir / "access_log.sqlite3"
 
+    @property
+    def snapshots_dir(self) -> Path:
+        return self.data_dir / "snapshots"
+
 
 def load_config() -> Config:
     data_dir = Path(os.getenv("DATA_DIR", str(_RECOGNITION_ROOT / "data"))).resolve()
@@ -61,6 +67,11 @@ def load_config() -> Config:
         gate_cooldown_seconds=float(os.getenv("GATE_COOLDOWN_SECONDS", "12")),
         data_dir=data_dir,
         log_level=os.getenv("LOG_LEVEL", "INFO"),
+        # Port 6380, not the default 6379 - matches docker-compose.yml at the
+        # repo root, which avoids colliding with an unrelated Redis instance
+        # some dev machines already run on the default port.
+        redis_url=os.getenv("REDIS_URL", "redis://localhost:6380"),
+        redis_recognition_channel=os.getenv("REDIS_RECOGNITION_CHANNEL", "gate:recognition-events"),
     )
 
 

@@ -29,7 +29,9 @@ def test_capture_sample_rejects_when_no_face_detected(tmp_path):
 
 def test_capture_sample_rejects_when_multiple_faces_detected(tmp_path):
     store = EmbeddingStore(tmp_path / "embeddings")
-    session = EnrollmentSession("ali", FakeDetector([make_face(), make_face()]), store, target_samples=3)
+    session = EnrollmentSession(
+        "ali", FakeDetector([make_face(), make_face()]), store, target_samples=3
+    )
 
     outcome = session.capture_sample(frame=None)
 

@@ -30,38 +30,42 @@ Each phase exists to isolate risk and defer spending. Phases 0–1 prove the ent
 
 ### 2.1 Phase 0 — Software-First Build on Webcam (Week 1–2, zero hardware cost)
 
+**Status: Complete** — see [docs/phase0.md](docs/phase0.md) for full details, setup instructions, and known limitations.
+
 **Objective:** Prove the full recognition pipeline works end to end using only the laptop's built-in webcam.
 
 **Sub-tasks:**
-- [ ] Install Ubuntu (or continue on the current OS for early dev) and set up a Python virtual environment
-- [ ] Install core dependencies: OpenCV, InsightFace (or DeepFace), numpy, and a lightweight local store for embeddings (a file or SQLite is fine before Phase 1's Postgres exists)
-- [ ] Write a capture script that opens the webcam via `cv2.VideoCapture(0)` and displays the live feed with an FPS counter
-- [ ] Integrate InsightFace's face detector into the capture loop to draw bounding boxes on detected faces
-- [ ] Build an enrollment script: capture 5–10 photos per family member from different angles/lighting, generate and store their face embeddings tagged with name
-- [ ] Implement the recognition loop: detect face → generate embedding → compare against all enrolled embeddings (cosine similarity) → return best match + confidence score
-- [ ] Define a configurable confidence threshold (not hardcoded) for the accept/reject decision
-- [ ] Build the "gate trigger" function as a stub: logs `"GATE WOULD OPEN for [Name]"` with a timestamp to the console and to a local log/DB — this is the exact function Phase 3 swaps to a real relay call, with no other code changes
-- [ ] Build a small labeled test set (known faces + unknown faces) and measure false-accept/false-reject rates at a few threshold values to pick a starting default
-- [ ] Document environment setup (`requirements.txt`, run instructions) so Phase 1's backend can call into this service
+- [x] Install Ubuntu (or continue on the current OS for early dev) and set up a Python virtual environment
+- [x] Install core dependencies: OpenCV, InsightFace (or DeepFace), numpy, and a lightweight local store for embeddings (a file or SQLite is fine before Phase 1's Postgres exists)
+- [x] Write a capture script that opens the webcam via `cv2.VideoCapture(0)` and displays the live feed with an FPS counter
+- [x] Integrate InsightFace's face detector into the capture loop to draw bounding boxes on detected faces
+- [x] Build an enrollment script: capture 5–10 photos per family member from different angles/lighting, generate and store their face embeddings tagged with name
+- [x] Implement the recognition loop: detect face → generate embedding → compare against all enrolled embeddings (cosine similarity) → return best match + confidence score
+- [x] Define a configurable confidence threshold (not hardcoded) for the accept/reject decision
+- [x] Build the "gate trigger" function as a stub: logs `"GATE WOULD OPEN for [Name]"` with a timestamp to the console and to a local log/DB — this is the exact function Phase 3 swaps to a real relay call, with no other code changes
+- [x] Build a small labeled test set (known faces + unknown faces) and measure false-accept/false-reject rates at a few threshold values to pick a starting default
+- [x] Document environment setup (`requirements.txt`, run instructions) so Phase 1's backend can call into this service
 
 ### 2.2 Phase 1 — Backend & Dashboard (Week 2–3, still zero hardware cost)
+
+**Status: Complete** — see [docs/phase1.md](docs/phase1.md) for architecture, API/WebSocket/Redis contracts, env vars, and test results.
 
 **Objective:** Wrap the recognition service with a backend, database, and dashboard so events, logs, and enrollment are manageable from a UI instead of the terminal.
 
 **Sub-tasks:**
-- [ ] Scaffold the Nest.js project (modules: members, access-events, auth)
-- [ ] Design the PostgreSQL schema: `members` (profile), `embeddings` (per-member face vectors/metadata), `access_logs` (timestamp, member, confidence, snapshot path, action taken)
-- [ ] Set up migrations (TypeORM/Prisma) for the schema above
-- [ ] Implement REST endpoints: member CRUD, access-log listing with filters, manual gate-trigger endpoint
-- [ ] Implement a WebSocket gateway for pushing live recognition events to connected dashboard clients
-- [ ] Wire Redis pub/sub between the Python recognition service and the Nest.js backend: the recognition service publishes on every match/unknown event, the backend subscribes and relays to WebSocket clients and writes to Postgres
-- [ ] Scaffold the Next.js dashboard and connect it to the backend's REST/WebSocket APIs
-- [ ] Build the Live Status Panel (camera snapshot, gate status, manual unlock button)
-- [ ] Build the Access Log page (table, date/person filters, snapshot preview)
-- [ ] Build the Family Members page (list, add-member flow that triggers enrollment capture, disable/remove toggle)
-- [ ] Build the Alerts panel (unknown-face banner, system health indicators)
-- [ ] Add basic authentication so the dashboard isn't reachable by anyone on the network
-- [ ] Run a full end-to-end test: webcam feed → recognition → simulated trigger → event appears live on the dashboard and in the access log
+- [x] Scaffold the Nest.js project (modules: members, access-events, auth)
+- [x] Design the PostgreSQL schema: `members` (profile), `embeddings` (per-member face vectors/metadata), `access_logs` (timestamp, member, confidence, snapshot path, action taken)
+- [x] Set up migrations (TypeORM/Prisma) for the schema above
+- [x] Implement REST endpoints: member CRUD, access-log listing with filters, manual gate-trigger endpoint
+- [x] Implement a WebSocket gateway for pushing live recognition events to connected dashboard clients
+- [x] Wire Redis pub/sub between the Python recognition service and the Nest.js backend: the recognition service publishes on every match/unknown event, the backend subscribes and relays to WebSocket clients and writes to Postgres
+- [x] Scaffold the Next.js dashboard and connect it to the backend's REST/WebSocket APIs
+- [x] Build the Live Status Panel (camera snapshot, gate status, manual unlock button)
+- [x] Build the Access Log page (table, date/person filters, snapshot preview)
+- [x] Build the Family Members page (list, add-member flow that triggers enrollment capture, disable/remove toggle)
+- [x] Build the Alerts panel (unknown-face banner, system health indicators)
+- [x] Add basic authentication so the dashboard isn't reachable by anyone on the network
+- [x] Run a full end-to-end test: webcam feed → recognition → simulated trigger → event appears live on the dashboard and in the access log
 
 ### 2.3 Phase 2 — Gate Check & Hardware Decisions (Week 3)
 
